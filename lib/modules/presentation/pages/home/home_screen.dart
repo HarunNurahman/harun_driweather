@@ -1,6 +1,16 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:harun_driweather/core/configs/divider_constant.dart';
 import 'package:harun_driweather/core/configs/themes.dart';
+import 'package:harun_driweather/core/configs/weather_code.dart';
+import 'package:harun_driweather/core/services/api_service.dart';
+import 'package:harun_driweather/core/services/location_service.dart';
+import 'package:harun_driweather/modules/models/weather_realtime/weather_realtime_result.dart';
+import 'package:harun_driweather/modules/presentation/bloc/weather/weather_bloc.dart';
+import 'package:harun_driweather/modules/presentation/pages/weather_detail/weather_detail_screen.dart';
 import 'package:harun_driweather/modules/presentation/widgets/rounded_button.dart';
 import 'package:harun_driweather/modules/presentation/widgets/svg_ui.dart';
 
@@ -12,6 +22,55 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final weatherBloc = WeatherBloc();
+
+  WeatherRealtimeResult? weatherRealtimeResult;
+
+  double lat = 6.9175; // default
+  double lon = 107.6181; // default
+  String city = ''; // default
+
+  getAddress(lat, lon) async {
+    List<Placemark> placemark = await placemarkFromCoordinates(lat, lon);
+    Placemark place = placemark[0];
+    setState(() {
+      city = place.subAdministrativeArea!;
+    });
+  }
+
+  Map<String, dynamic> params = {};
+
+  getBloc() {
+    params['location'] = '$lat,$lon';
+    params['unit'] = 'metric';
+    params['apikey'] = ApiService.apiKey;
+    weatherBloc.add(GetRealtimeWeatherEvent(params));
+  }
+
+  Future<void> getCurrentLocationAndWeather() async {
+    try {
+      Position position = await LocationService().getCurrentLocation();
+      setState(() {
+        lat = position.latitude;
+        lon = position.longitude;
+      });
+      getAddress(lat, lon);
+      getBloc();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+        ),
+      );
+    }
+  }
+
+  @override
+  void initState() {
+    getCurrentLocationAndWeather();
+    super.initState();
+  }
+
   final List<Map<String, dynamic>> notifications = [
     {
       "time": "10 minutes ago",
@@ -38,49 +97,79 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [blueColor100, blueColor200],
-          ),
-        ),
-        child: Stack(
-          children: [
-            _buildPositionedSvg(
-              'vector_line_left.svg',
-              top: MediaQuery.of(context).size.height * 0.1,
-              left: 0,
-            ),
-            _buildPositionedSvg('vector_line_right.svg', top: 0, right: 0),
-            SingleChildScrollView(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 30, vertical: 80),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+    return BlocProvider(
+      create: (context) => weatherBloc,
+      child: Scaffold(
+        body: BlocBuilder<WeatherBloc, WeatherState>(
+          builder: (context, state) {
+            if (state is RealtimeWeatherLoadingState) {
+              return const Center(
+                child: CircularProgressIndicator(),
+              );
+            } else if (state is RealtimeWeatherLoadedState) {
+              weatherRealtimeResult = state.weatherRealtimeResult;
+              return Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [blueColor100, blueColor200],
+                  ),
+                ),
+                child: Stack(
                   children: [
-                    // Location header
-                    buildLocationHeader(),
-                    divide30,
-                    // Weather icon
-                    Image.asset('assets/images/01n.png'),
-                    divide30,
-                    // Weather information
-                    buildWeatherInfo(),
-                    divide100,
-                    RoundedButton(
-                      onTap: () => Navigator.pushNamed(context, '/detail'),
-                      title: 'Weather Detail',
-                      suffixIcon: true,
+                    _buildPositionedSvg(
+                      'vector_line_left.svg',
+                      top: MediaQuery.of(context).size.height * 0.1,
+                      left: 0,
+                    ),
+                    _buildPositionedSvg(
+                      'vector_line_right.svg',
+                      top: 0,
+                      right: 0,
+                    ),
+                    SingleChildScrollView(
+                      child: Padding(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 30, vertical: 80),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            // Location header
+                            buildLocationHeader(),
+                            divide30,
+                            // Weather icon
+                            Image.asset(
+                              getWeatherIcon(
+                                weatherRealtimeResult
+                                    ?.weatherData!.values!.weatherCode!,
+                              ),
+                            ),
+                            divide30,
+                            // Weather information
+                            buildWeatherInfo(),
+                            divide40,
+                            RoundedButton(
+                              onTap: () => Navigator.pushNamed(
+                                context,
+                                '/detail',
+                                arguments: {'lat': lat, 'lon': lon},
+                              ),
+                              title: 'Weather Detail',
+                              suffixIcon: true,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
-              ),
-            ),
-          ],
+              );
+            } else {
+              return Container();
+            }
+          },
         ),
       ),
     );
@@ -91,18 +180,21 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: () => Navigator.pushNamed(context, '/search'),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 20,
         children: [
           SvgUI('ic_location.svg'),
-          Text(
-            'Semarang',
-            style: whiteTextStyle.copyWith(
-              fontSize: 24,
-              fontWeight: semiBold,
+          divideW20,
+          Expanded(
+            child: Text(
+              city,
+              overflow: TextOverflow.ellipsis,
+              style: whiteTextStyle.copyWith(
+                fontSize: 24,
+                fontWeight: semiBold,
+              ),
             ),
           ),
           SvgUI('ic_chevron_down.svg'),
-          const Spacer(),
+          divideW20,
           SvgUI(
             'ic_notification_active.svg',
             onTap: () => bottomModal(),
@@ -125,28 +217,38 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
-            'Today, 11 February',
+            'Today, ${DateFormat('dd MMMM').format(DateTime.now())}',
             style: whiteTextStyle.copyWith(fontSize: 18),
           ),
           divide30,
           Text(
-            '29°',
+            '${weatherRealtimeResult?.weatherData!.values!.temperature!.toString()}°',
             style: whiteTextStyle.copyWith(
               fontSize: 100,
               fontWeight: semiBold,
             ),
           ),
           Text(
-            'Cloudy',
+            getWeatherDescription(
+              weatherRealtimeResult?.weatherData!.values!.weatherCode,
+            ),
             style: whiteTextStyle.copyWith(
               fontSize: 24,
               fontWeight: semiBold,
             ),
           ),
           divide30,
-          _buildWeatherDetail('ic_wind.svg', 'Wind', '10m/s'),
+          _buildWeatherDetail(
+            'ic_wind.svg',
+            'Wind',
+            '${weatherRealtimeResult!.weatherData!.values!.windSpeed!.toString()}m/s',
+          ),
           divide16,
-          _buildWeatherDetail('ic_humidity.svg', 'Hum', '50%'),
+          _buildWeatherDetail(
+            'ic_humidity.svg',
+            'Hum',
+            '${weatherRealtimeResult!.weatherData!.values!.humidity!.toString()}%',
+          ),
         ],
       ),
     );
@@ -299,5 +401,19 @@ class _HomeScreenState extends State<HomeScreen> {
         },
       ),
     );
+  }
+
+  String getWeatherDescription(int? weatherCode) {
+    if (weatherCode == null) {
+      return 'Unknown';
+    }
+    return weatherCodeMapping[weatherCode]?['description'] ?? 'Unknown';
+  }
+
+  String getWeatherIcon(int? weatherCode) {
+    if (weatherCode == null) {
+      return 'assets/images/1000.png';
+    }
+    return 'assets/images/${weatherCodeMapping[weatherCode]?['icon']}';
   }
 }

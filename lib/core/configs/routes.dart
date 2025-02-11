@@ -9,7 +9,14 @@ class Routes {
     return {
       '/': (context) => OnboardingScreen(),
       '/home': (context) => HomeScreen(),
-      '/detail': (context) => WeatherDetailScreen(),
+      '/detail': (context) {
+        final args =
+            ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+        return WeatherDetailScreen(
+          lat: args['lat'],
+          lon: args['lon'],
+        );
+      },
       '/search': (context) => SearchScreen(),
     };
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:harun_driweather/core/configs/divider_constant.dart';
 import 'package:harun_driweather/core/configs/themes.dart';
+import 'package:harun_driweather/core/services/location_service.dart';
 import 'package:harun_driweather/modules/presentation/widgets/rounded_button.dart';
 import 'package:harun_driweather/modules/presentation/widgets/svg_ui.dart';
 
@@ -87,11 +88,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
             divideW16,
             RoundedButton(
-              onTap: () => Navigator.pushNamedAndRemoveUntil(
-                context,
-                '/home',
-                (route) => false,
-              ),
+              onTap: () async {
+                try {
+                  await LocationService().requestLocationPermission();
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/home',
+                    (route) => false,
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(e.toString()),
+                    ),
+                  );
+                }
+              },
               title: 'Get Started',
             ),
           ],

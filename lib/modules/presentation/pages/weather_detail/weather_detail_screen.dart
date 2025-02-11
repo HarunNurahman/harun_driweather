@@ -1,132 +1,124 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:harun_driweather/core/configs/divider_constant.dart';
 import 'package:harun_driweather/core/configs/themes.dart';
+import 'package:harun_driweather/core/configs/weather_code.dart';
+import 'package:harun_driweather/core/services/api_service.dart';
+import 'package:harun_driweather/modules/models/weather_forecast/daily.dart';
+import 'package:harun_driweather/modules/models/weather_forecast/hourly.dart';
+import 'package:harun_driweather/modules/models/weather_forecast/weather_forecast_result.dart';
+import 'package:harun_driweather/modules/presentation/bloc/weather/weather_bloc.dart';
 import 'package:harun_driweather/modules/presentation/widgets/svg_ui.dart';
 
+class WeatherDetailArgument {
+  final double lat;
+  final double lon;
+  const WeatherDetailArgument({required this.lat, required this.lon});
+}
+
 class WeatherDetailScreen extends StatefulWidget {
-  const WeatherDetailScreen({super.key});
+  final double lat;
+  final double lon;
+  const WeatherDetailScreen({super.key, required this.lat, required this.lon});
 
   @override
   State<WeatherDetailScreen> createState() => _WeatherDetailScreenState();
 }
 
 class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
+  final weatherBloc = WeatherBloc();
+
+  List hourly = <Hourly>[];
+  List daily = <Daily>[];
+
+  WeatherForecastResult? weatherForecastResult;
+
   int? selectedIndex;
 
-  final List<Map<String, dynamic>> hourlyWeatherData = [
-    {
-      'icon': '01d.png',
-      'time': '15:00',
-      'value': '29°C',
-    },
-    {
-      'icon': '01d.png',
-      'time': '16:00',
-      'value': '29°C',
-    },
-    {
-      'icon': '01d.png',
-      'time': '17:00',
-      'value': '29°C',
-    },
-    {
-      'icon': '01d.png',
-      'time': '18:00',
-      'value': '29°C',
-    },
-    {
-      'icon': '01d.png',
-      'time': '19:00',
-      'value': '29°C',
-    },
-    {
-      'icon': '01d.png',
-      'time': '20:00',
-      'value': '29°C',
-    },
-  ];
+  Map<String, dynamic> params = {};
 
-  final List<Map<String, dynamic>> dailyWeatherData = [
-    {
-      'icon': '01d.png',
-      'time': 'Feb, 12',
-      'value': '29°C',
-    },
-    {
-      'icon': '01d.png',
-      'time': 'Feb, 13',
-      'value': '29°C',
-    },
-    {
-      'icon': '01d.png',
-      'time': 'Feb, 14',
-      'value': '29°C',
-    },
-    {
-      'icon': '01d.png',
-      'time': 'Feb, 15',
-      'value': '29°C',
-    },
-    {
-      'icon': '01d.png',
-      'time': 'Feb, 16',
-      'value': '29°C',
-    },
-    {
-      'icon': '01d.png',
-      'time': 'Feb, 17',
-      'value': '29°C',
-    },
-  ];
+  getBloc() {
+    params['location'] = '${widget.lat},${widget.lon}';
+    params['timestep'] = '1h,1d';
+    params['units'] = 'metric';
+    params['apikey'] = ApiService.apiKey;
+    weatherBloc.add(GetForecastWeatherEvent(params));
+  }
+
+  @override
+  void initState() {
+    getBloc();
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [blueColor100, blueColor200],
-          ),
-        ),
-        child: Stack(
-          children: [
-            _buildPositionedSvg(
-              'vector_line_left.svg',
-              top: MediaQuery.of(context).size.height * 0.1,
-              left: 0,
-            ),
-            _buildPositionedSvg('vector_line_right.svg', top: 0, right: 0),
-            SingleChildScrollView(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 30, vertical: 80),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return BlocProvider(
+      create: (context) => weatherBloc,
+      child: Scaffold(
+        body: BlocBuilder<WeatherBloc, WeatherState>(
+          builder: (context, state) {
+            if (state is ForecastWeatherLoadingState) {
+              return const Center(child: CircularProgressIndicator());
+            } else if (state is ForecastWeatherLoadedState) {
+              weatherForecastResult = state.weatherForecastResult;
+              return Container(
+                width: double.infinity,
+                height: double.infinity,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [blueColor100, blueColor200],
+                  ),
+                ),
+                child: Stack(
                   children: [
-                    buildBackButton(),
-                    divide48,
-                    buildHourlyWeather(),
-                    divide48,
-                    buildDailyWeather(),
-                    divide48,
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SvgUI('ic_sunny.svg', color: whiteColor),
-                        divideW8,
-                        Text(
-                          'DRIWeather',
-                          style: whiteTextStyle.copyWith(fontSize: 18),
+                    _buildPositionedSvg(
+                      'vector_line_left.svg',
+                      top: MediaQuery.of(context).size.height * 0.1,
+                      left: 0,
+                    ),
+                    _buildPositionedSvg('vector_line_right.svg',
+                        top: 0, right: 0),
+                    SingleChildScrollView(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 30,
+                          vertical: 80,
                         ),
-                      ],
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            buildBackButton(),
+                            divide48,
+                            buildHourlyWeather(),
+                            divide48,
+                            buildDailyWeather(),
+                            divide48,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SvgUI('ic_sunny.svg', color: whiteColor),
+                                divideW8,
+                                Text(
+                                  'DRIWeather',
+                                  style: whiteTextStyle.copyWith(fontSize: 18),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
-              ),
-            ),
-          ],
+              );
+            } else {
+              return Container();
+            }
+          },
         ),
       ),
     );
@@ -166,7 +158,7 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
               ),
             ),
             Text(
-              'Feb, 12',
+              DateFormat('MMM, dd').format(DateTime.now()),
               style: whiteTextStyle.copyWith(fontSize: 18),
             )
           ],
@@ -175,15 +167,13 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
-            children: hourlyWeatherData
-                .asMap()
-                .entries
+            children: weatherForecastResult!.timelines!.hourly!
                 .map(
-                  (entry) => _buildHourlyWeatherItem(
-                    entry.key,
-                    entry.value['icon'],
-                    entry.value['time'],
-                    entry.value['value'],
+                  (e) => _buildHourlyWeatherItem(
+                    weatherForecastResult!.timelines!.hourly!.indexOf(e),
+                    getWeatherIcon(e.values!.weatherCode),
+                    DateFormat('HH:mm').format(DateTime.parse(e.time!)),
+                    e.values!.temperature.toString(),
                   ),
                 )
                 .toList(),
@@ -212,21 +202,22 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
             shrinkWrap: true,
             padding: EdgeInsets.zero,
             itemBuilder: (context, index) {
+              var data = weatherForecastResult!.timelines!.daily![index];
               return Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    dailyWeatherData[index]['time'],
+                    DateFormat('MMM, dd').format(DateTime.parse(data.time!)),
                     style: whiteTextStyle.copyWith(
                       fontSize: 18,
                     ),
                   ),
                   Image.asset(
-                    'assets/images/${dailyWeatherData[index]['icon']}',
+                    getWeatherIcon(data.values!.weatherCodeMin),
                     width: 42,
                   ),
                   Text(
-                    dailyWeatherData[index]['value'],
+                    '${data.values!.temperatureAvg}°C',
                     style: whiteTextStyle.copyWith(
                       fontSize: 18,
                     ),
@@ -235,7 +226,7 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
               );
             },
             separatorBuilder: (context, index) => divide20,
-            itemCount: dailyWeatherData.length,
+            itemCount: weatherForecastResult!.timelines!.daily!.length,
           ),
         )
       ],
@@ -259,7 +250,11 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
   }
 
   Widget _buildHourlyWeatherItem(
-      int index, String iconPath, String time, String value) {
+    int index,
+    String iconPath,
+    String time,
+    String value,
+  ) {
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -282,11 +277,11 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
           spacing: 24,
           children: [
             Text(
-              value,
+              '$value°C',
               style: whiteTextStyle.copyWith(fontSize: 18),
             ),
             Image.asset(
-              'assets/images/$iconPath',
+              iconPath,
               width: 42,
             ),
             Text(
@@ -297,5 +292,12 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
         ),
       ),
     );
+  }
+
+  String getWeatherIcon(int? weatherCode) {
+    if (weatherCode == null) {
+      return 'assets/images/1000.png';
+    }
+    return 'assets/images/${weatherCodeMapping[weatherCode]?['icon']}';
   }
 }
