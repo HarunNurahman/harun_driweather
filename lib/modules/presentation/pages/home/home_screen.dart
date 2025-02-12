@@ -10,7 +10,6 @@ import 'package:harun_driweather/core/services/api_service.dart';
 import 'package:harun_driweather/core/services/location_service.dart';
 import 'package:harun_driweather/modules/models/weather_realtime/weather_realtime_result.dart';
 import 'package:harun_driweather/modules/presentation/bloc/weather/weather_bloc.dart';
-import 'package:harun_driweather/modules/presentation/pages/weather_detail/weather_detail_screen.dart';
 import 'package:harun_driweather/modules/presentation/widgets/rounded_button.dart';
 import 'package:harun_driweather/modules/presentation/widgets/svg_ui.dart';
 
@@ -28,14 +27,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
   double lat = 6.9175; // default
   double lon = 107.6181; // default
-  String city = ''; // default
+  String? city; // default
 
-  getAddress(lat, lon) async {
-    List<Placemark> placemark = await placemarkFromCoordinates(lat, lon);
-    Placemark place = placemark[0];
-    setState(() {
-      city = place.subAdministrativeArea!;
-    });
+  Future<void> getAddress(double lat, double lon) async {
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(lat, lon);
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks[0];
+        setState(() {
+          city = place.subAdministrativeArea ?? 'Unknown';
+        });
+      }
+    } catch (e) {
+      print('Error occurred while getting address: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to get address. Please try again later.'),
+        ),
+      );
+    }
   }
 
   Map<String, dynamic> params = {};
@@ -55,6 +65,8 @@ class _HomeScreenState extends State<HomeScreen> {
         lon = position.longitude;
       });
       getAddress(lat, lon);
+      print('Get Lon: $lat');
+      print('Get Lon: $lon');
       getBloc();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -177,7 +189,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget buildLocationHeader() {
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, '/search'),
+      onTap: () async {
+        final result = await Navigator.pushNamed(
+          context,
+          '/search',
+          arguments: {'currentLat': lat, 'currentLon': lon},
+        );
+
+        if (result != null && result is Map<String, double>) {
+          setState(() {
+            lat = result['lat']!;
+            lon = result['lon']!;
+          });
+          getAddress(lat, lon);
+          getBloc();
+        }
+      },
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -185,7 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
           divideW20,
           Expanded(
             child: Text(
-              city,
+              city ?? '-',
               overflow: TextOverflow.ellipsis,
               style: whiteTextStyle.copyWith(
                 fontSize: 24,

@@ -17,7 +17,14 @@ class Routes {
           lon: args['lon'],
         );
       },
-      '/search': (context) => SearchScreen(),
+      '/search': (context) {
+        final args =
+            ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+        return SearchScreen(
+          currentLat: args['currentLat'],
+          currentLon: args['currentLon'],
+        );
+      },
     };
   }
 }
